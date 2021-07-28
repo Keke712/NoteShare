@@ -1,0 +1,2 @@
+rootProject.name = "NoteShare"
+include ':app'
