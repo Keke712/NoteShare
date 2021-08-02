@@ -1,6 +1,7 @@
 <resources>
     <string name="app_name">NoteShare</string>
-    <string name="button_search">Search</string>
+    <string name="button_search">Refresh</string>
     <string name="detectable_button">Make me detectable</string>
     <string name="button_send">Send</string>
+    <string name="button_solver">DEBUG</string>
 </resources>

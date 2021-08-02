@@ -9,7 +9,6 @@ import be.keption.noteshare.MainActivity;
 
 public class WifiP2PBroadCast extends BroadcastReceiver {
 
-
     private WifiP2pManager mManager;
     private WifiP2pManager.Channel mChannel;
     private MainActivity activity;
@@ -32,8 +31,7 @@ public class WifiP2PBroadCast extends BroadcastReceiver {
 
         } else if (WifiP2pManager.WIFI_P2P_THIS_DEVICE_CHANGED_ACTION.equals(action)) {
             // Respond to this device's wifi state changing
-            activity.updateDeviceInfo((WifiP2pDevice) intent.getParcelableExtra(
-                    WifiP2pManager.EXTRA_WIFI_P2P_DEVICE));
+            activity.updateDeviceInfo((WifiP2pDevice) intent.getParcelableExtra(WifiP2pManager.EXTRA_WIFI_P2P_DEVICE));
         }
     }
 }

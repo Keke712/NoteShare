@@ -14,7 +14,6 @@ import java.util.List;
 
 import android.Manifest;
 import android.app.Activity;
-import android.app.Application;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.IntentFilter;
@@ -29,8 +28,8 @@ import android.net.wifi.p2p.WifiP2pManager.Channel;
 import android.net.wifi.p2p.WifiP2pManager.ConnectionInfoListener;
 import android.net.wifi.p2p.WifiP2pManager.PeerListListener;
 import android.os.AsyncTask;
+import android.os.Build;
 import android.os.Bundle;
-import android.util.Log;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.view.WindowManager;
@@ -43,8 +42,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.core.app.ActivityCompat;
-
-import be.keption.noteshare.*;
+import androidx.core.content.ContextCompat;
 
 public class MainActivity extends Activity implements OnClickListener, PeerListListener, ConnectionInfoListener {
 
@@ -60,10 +58,12 @@ public class MainActivity extends Activity implements OnClickListener, PeerListL
     ListView listPeers;
     TextView mTextDeviceName, mTextStatus, mTextGroupOwner;
     EditText mEditText_message;
-    static String toastmessage;
+    static String toastMessage;
     Context context = MainActivity.this;
     static String message = "";
     boolean isPeerServer;
+    TextView error;
+    TextView messageLabel;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -85,20 +85,39 @@ public class MainActivity extends Activity implements OnClickListener, PeerListL
         findViewById(R.id.button_search).setOnClickListener(this);
         findViewById(R.id.button_send).setOnClickListener(this);
 
+        error = (TextView) findViewById(R.id.ceciestunlabel);
         listPeers = (ListView) findViewById(R.id.list_peers);
         mTextDeviceName = (TextView) findViewById(R.id.text_device_name);
         mTextStatus = (TextView) findViewById(R.id.text_Status);
         mTextGroupOwner = (TextView) findViewById(R.id.text_group_owner);
         mEditText_message = (EditText) findViewById(R.id.edittext_message);
+        messageLabel = (TextView) findViewById(R.id.messageLabel);
+
+        requestPermissions();
 
         listPeers.setOnItemClickListener(new OnItemClickListener() {
-
             @Override
             public void onItemClick(AdapterView<?> arg0, View arg1, int position, long arg3) {
                 // TODO Auto-generated method stub
                 connectWithPeers(position);
             }
         });
+    }
+
+    private void requestPermissions() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[]{Manifest.permission.ACCESS_COARSE_LOCATION,
+                        Manifest.permission.ACCESS_FINE_LOCATION,
+                        Manifest.permission.ACCESS_WIFI_STATE,
+                        Manifest.permission.CHANGE_WIFI_STATE,
+                        Manifest.permission.CHANGE_NETWORK_STATE,
+                        Manifest.permission.INTERNET,
+                        Manifest.permission.ACCESS_NETWORK_STATE,
+                        Manifest.permission.UPDATE_DEVICE_STATS
+                }, 0);
+            }
+        }
     }
 
     @Override
@@ -148,24 +167,33 @@ public class MainActivity extends Activity implements OnClickListener, PeerListL
             case R.id.button_send:
                 sendMessage();
                 break;
+            case R.id.button_disconnect:
+                UniversalResolver();
+                break;
             default:
                 break;
         }
 
     }
 
+    public void UniversalResolver() {
+        mManager.removeGroup(mChannel, null);
+    }
+
     public void discoverPeers() {
+
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            return;
+            error.setText("Perm problem");
         }
         Context need = this;
         mManager.discoverPeers(mChannel, new WifiP2pManager.ActionListener() {
             @Override
             public void onSuccess() {
-                Log.e("test", "Discovering Peers Success..");
+                error.setText("Discovering Peers Success..");
+
                 if (mManager != null) {
                     if (ActivityCompat.checkSelfPermission(need, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-                        return;
+                        error.setText("Perm problem");
                     }
                     mManager.requestPeers(mChannel, MainActivity.this);
                 }
@@ -173,7 +201,7 @@ public class MainActivity extends Activity implements OnClickListener, PeerListL
 
             @Override
             public void onFailure(int reasonCode) {
-                Log.e("test", "Discovering Peers Fail..");
+                error.setText("Discovering Peers Fail..");
             }
         });
     }
@@ -185,18 +213,19 @@ public class MainActivity extends Activity implements OnClickListener, PeerListL
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             return;
         }
+
         mManager.connect(mChannel, config, new ActionListener() {
 
             @Override
             public void onSuccess() {
                 //success logic
-                Log.e("test", "Connection with peer Success..");
+                error.setText("Connection with peer Success..");
             }
 
             @Override
             public void onFailure(int reason) {
                 //failure logic
-                Log.e("test", "Connection with peer Failed..");
+                error.setText("Connection with peer Failed..");
             }
         });
     }
@@ -204,22 +233,24 @@ public class MainActivity extends Activity implements OnClickListener, PeerListL
     public void sendMessage() {
         if (!isPeerServer) {
             //Client Peer
-            Toast.makeText(MainActivity.this, "client sending message", Toast.LENGTH_SHORT).show();
+            Toast.makeText(MainActivity.this, "Client sending message", Toast.LENGTH_SHORT).show();
             new SendMessage().execute(MainActivity.this);
         } else {
             //Server Peer
-            Toast.makeText(MainActivity.this, "server sending message", Toast.LENGTH_SHORT).show();
+            Toast.makeText(MainActivity.this, "Server sending message", Toast.LENGTH_SHORT).show();
             new FileServerAsyncTask(this, "").execute();
         }
 
     }
 
-    //Send message form client to server
+    // CLIENT TO SERVER
     public class SendMessage extends AsyncTask {
         @Override
         protected Object doInBackground(Object... arg0) {
-            // TODO Auto-generated method stub
             try {
+                if (info.groupOwnerAddress == null) {
+                    error.setText("Info: null");
+                }
                 message = mEditText_message.getText().toString();
 
                 Socket socket = new Socket(info.groupOwnerAddress.getHostAddress(), 8988);
@@ -233,17 +264,16 @@ public class MainActivity extends Activity implements OnClickListener, PeerListL
                 String sendMessage = number + "\n";
                 bw.write(sendMessage);
                 bw.flush();
-                Log.e("test", "Message sent to the server : "+sendMessage);
 
                 //Get the return message from the server
                 InputStream is = socket.getInputStream();
                 InputStreamReader isr = new InputStreamReader(is);
                 BufferedReader br = new BufferedReader(isr);
                 String message = br.readLine();
-                Log.e("test", "Message received from the server : " +message);
+
                 socket.close();
             }catch(IOException e){
-                Log.e("test", "CLIENT to SERVER message sending exception: "+e.getMessage());
+                System.out.println("Exception");
             }finally {
             }
             return null;
@@ -253,7 +283,6 @@ public class MainActivity extends Activity implements OnClickListener, PeerListL
         protected void onPostExecute(Object result) {
             // TODO Auto-generated method stub
             super.onPostExecute(result);
-            Toast.makeText(MainActivity.this, "MESSAGE: "+message, Toast.LENGTH_SHORT).show();
         }
 
     }
@@ -261,17 +290,17 @@ public class MainActivity extends Activity implements OnClickListener, PeerListL
     @Override
     public void onConnectionInfoAvailable(WifiP2pInfo wifiP2pInfo) {
         // TODO Auto-generated method stub
-        Log.e("test", "..onConnectionInfoAvailable..");
+
         info = wifiP2pInfo;
         try {
             groupOwnerAddress = wifiP2pInfo.groupOwnerAddress.getHostAddress();
         } catch (Exception e) {
             // TODO: handle exception
-            Log.e("test", "Owner Info null");
+            error.setText("Owner Info: null");
+
         }
 
         if (info.groupFormed && info.isGroupOwner) {
-            Log.e("test", "GOT INFORMATION FROM PEERS..");
             new FileServerAsyncTask(this, "").execute();
         }
         if (wifiP2pInfo.isGroupOwner) {
@@ -279,13 +308,26 @@ public class MainActivity extends Activity implements OnClickListener, PeerListL
         } else {
             isPeerServer = false;
         }
-        mTextGroupOwner.setText("Is group owner? ---- "+((wifiP2pInfo.isGroupOwner == true) ? "yes" : "no"));
+
+        Boolean isGroupOwner = wifiP2pInfo.isGroupOwner;
+        Boolean isGroup = wifiP2pInfo.groupFormed;
+        if (isGroup == true) {
+            if (isGroupOwner == true) {
+                mTextGroupOwner.setText(": Owner");
+            }else {
+                mTextGroupOwner.setText(": Client");
+            }
+        }else{
+            mTextGroupOwner.setText("");
+        }
+
     }
 
     @Override
     public void onPeersAvailable(WifiP2pDeviceList peerList) {
         // TODO Auto-generated method stub
-        Log.e("test", "NUMBER OF PEERS AVAILABLE: ----- "+peerList.getDeviceList().size());
+        error.setText("PEERS AVAILABLE: "+peerList.getDeviceList().size());
+
         peers.clear();
         peers.addAll(peerList.getDeviceList());
 
@@ -295,19 +337,20 @@ public class MainActivity extends Activity implements OnClickListener, PeerListL
         }
 
         try {
-            ArrayAdapter<String> adapter = new ArrayAdapter<String>(MainActivity.this, R.layout.simplerow, devices);
+            ArrayAdapter<String> adapter = new ArrayAdapter<String>(MainActivity.this, android.R.layout.simple_list_item_1, devices);
             listPeers.setAdapter(adapter);
         }catch (Exception e) {
             // TODO: handle exception
-            Log.e("test", "EXCEPTION: "+e.toString());
+            error.setText("EXCEPTION: "+e.toString());
+
         }
 
     }
 
-    //Send message form server to client
+    // SERVER TO CLIENT
     public class FileServerAsyncTask extends AsyncTask<Object, Object, Object> {
         private Context context;
-        String message;
+        public String message;
         public FileServerAsyncTask(Context context, String statusText) {
             this.context = context;
         }
@@ -324,23 +367,26 @@ public class MainActivity extends Activity implements OnClickListener, PeerListL
                 InputStreamReader isr = new InputStreamReader(is);
                 BufferedReader br = new BufferedReader(isr);
                 String number = br.readLine();
-                toastmessage = number;
-                Log.e("test", "Message received from client is "+number);
+                toastMessage = number;
+
+                message = "Message: "+number;
+                messageLabel.setText(message);
+                error.setText(message);
 
                 //Multiplying the number by 2 and forming the return message
                 String returnMessage;
-                returnMessage = "Return message from Server..";//String.valueOf(returnValue) + "\n";
+                returnMessage = "Return message from Server";//String.valueOf(returnValue) + "\n";
 
                 //Sending the response back to the client.
                 OutputStream os = socket.getOutputStream();
                 OutputStreamWriter osw = new OutputStreamWriter(os);
                 BufferedWriter bw = new BufferedWriter(osw);
                 bw.write(returnMessage);
-                Log.e("test", "Message sent to the client is "+returnMessage);
+
                 bw.flush();
 
             }catch (Exception e){
-                Log.e("test", "SERVER to CLIENT message sending exception: "+e.getMessage());
+                UniversalResolver();
             }finally {
                 try{
                     socket.close();
@@ -353,7 +399,7 @@ public class MainActivity extends Activity implements OnClickListener, PeerListL
         @Override
         protected void onPostExecute(Object result) {
             // TODO Auto-generated method stub
-            Toast.makeText(MainActivity.this, "Message from Client: "+toastmessage, Toast.LENGTH_SHORT).show();
+            messageLabel.setText("Message: "+toastMessage);
         }
 
     }
